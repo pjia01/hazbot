@@ -9,7 +9,7 @@ BME280 myBME;
 const int TRIG_PIN = 6;      // Ultrasonic sensor trigger pin
 const int ECHO_PIN = 5;      // Ultrasonic sensor echo pin
 const int MIC_PIN = A1;      // Microphone analog input
-const int LED_R = 2;         // Red LED pin (PWM capable)
+const int LED_R = 2;         // Red LED pin (on/off only on an Uno: pin 2 has no PWM)
 const int LED_G = A3;        // Green LED pin
 const int LED_B = A2;        // Blue LED pin
 const int BUZZER_PIN = 3;    // Buzzer for audible alert
@@ -32,14 +32,12 @@ const float FIVE_FEET_MS = 3500;       // Approximate time in milliseconds to tr
 // we will need to tune FIVE_FEET_MS by testing our actual bot.
 // Start with 3500ms and adjust up or down until the bot travels exactly 5 feet.
 
-const int SPEED_LEFT = 255;   // Slightly slower to match right motor
-const int SPEED_RIGHT = 255;  // Base speed
-const int BASE_SPEED = 255;
+const int BASE_SPEED = 255;            // Normal driving speed (0-255)
 const int FAST_SPEED = 255;            // Speed used in the hot temperature zone
 const int ROOM_TEMP_THRESHOLD = 28;    // Degrees Celsius considered "room temperature"
 const int HOT_TEMP_THRESHOLD = 35;     // Degrees Celsius that triggers heat response
 const int MIC_THRESHOLD = 600;         // Raw analog value that counts as a loud sound
-const int VOC_THRESHOLD = 400;         // Raw analog value that counts as VOC detection
+const int AQI_THRESHOLD = 3;           // ENS160 air quality index (1-5) that counts as toxic gas
 
 // This function fires the ultrasonic sensor and returns the distance in cm.
 float measureDistance() {
@@ -64,7 +62,7 @@ float measureDistance() {
 }
 
 
-// Reads the analog temperature sensor and converts it to Celsius.
+// Reads the temperature in Celsius from the BME280.
 float readTemperatureCelsius() {
   return myBME.readTempC();
 }
@@ -101,10 +99,10 @@ void moveForward(int speed) {
   digitalWrite(STBY, HIGH);
   digitalWrite(AIN1, HIGH);
   digitalWrite(AIN2, LOW);
-  analogWrite(PWMA, SPEED_LEFT);
+  analogWrite(PWMA, speed);
   digitalWrite(BIN1, HIGH);
   digitalWrite(BIN2, LOW);
-  analogWrite(PWMB, SPEED_RIGHT);
+  analogWrite(PWMB, speed);
 }
 
 
@@ -155,6 +153,9 @@ void turnAround() {
 // setup() runs once when the Arduino powers on.
 // we use it to configure every pin as either INPUT or OUTPUT.
 void setup() {
+  // Start serial first so the sensor error messages below can print.
+  Serial.begin(9600);
+
   // Ultrasonic sensor
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
@@ -169,6 +170,7 @@ void setup() {
   pinMode(BUZZER_PIN, OUTPUT);
   pinMode(AIN1, OUTPUT);
   pinMode(AIN2, OUTPUT);
+  pinMode(PWMA, OUTPUT);
   pinMode(BIN1, OUTPUT);
   pinMode(BIN2, OUTPUT);
   pinMode(PWMB, OUTPUT);
@@ -188,9 +190,6 @@ void setup() {
   }
 
   myENS.setOperatingMode(SFE_ENS160_STANDARD);
-
-  // Start serial monitor so we can debug sensor values.
-  Serial.begin(9600);
 }
 
 
@@ -312,7 +311,7 @@ void loop() {
     int vocVal = readVOC();
     Serial.print("VOC: "); Serial.println(vocVal);
 
-    if (vocVal >= 3){
+    if (vocVal >= AQI_THRESHOLD) {
       // VOC detected. Option A: turn around and move toward finish.
       stopMotors();
       delay(200);
